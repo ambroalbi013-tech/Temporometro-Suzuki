@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#101712">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Temporometro">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Temporometro 4x4</title>
+<style>
+:root{--bg:#0d1410;--panel:#19251d;--panel2:#202f25;--line:#34483a;--text:#f1f5ef;--muted:#a4b5a6;--accent:#b6d39a;--warn:#e7bd68;--danger:#dc786d}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;padding:calc(12px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+header{display:flex;justify-content:space-between;align-items:center;margin:5px 2px 16px}h1{font-size:20px;letter-spacing:2px;margin:0}.sub{font-size:9px;letter-spacing:2px;color:var(--muted);margin-top:4px}.status{font-size:10px;color:var(--accent);text-align:right;max-width:115px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:14px;min-width:0}.wide{grid-column:1/-1}.label{font-size:10px;letter-spacing:1.2px;color:var(--muted)}.num{font-size:clamp(30px,8vw,43px);font-weight:750;letter-spacing:-1px;margin:8px 0 1px;white-space:nowrap}.unit{font-size:10px;color:var(--muted)}.smallnum{font-size:24px;font-weight:700;margin-top:7px}
+button{border:0;border-radius:11px;padding:14px 12px;background:#58734f;color:white;font-weight:750;font-size:13px;min-height:46px;cursor:pointer}button.secondary{background:#35483a}button.danger{background:#8e4038}button:disabled{opacity:.4}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.buttons button{width:100%}
+#vehicleWrap{height:155px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#111b14;border-radius:12px;margin-top:10px;position:relative}
+#vehicle{width:112px;height:64px;border:3px solid var(--accent);border-radius:17px;display:flex;align-items:center;justify-content:center;font-size:31px;position:relative;transition:transform .08s linear}
+#vehicle:before,#vehicle:after{content:"";position:absolute;width:12px;height:19px;background:#8b9b8c;border-radius:4px;top:7px}
+#vehicle:before{left:-7px}#vehicle:after{right:-7px}
+.axis{position:absolute;background:#536857;opacity:.7}.axis.x{width:85%;height:1px}.axis.y{height:85%;width:1px}
+.legend{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;margin-top:8px}
+.note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:9px}
+#chart{width:100%;height:115px;display:block;margin-top:8px}
+.statrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #2d3b31;font-size:12px}.statrow:last-child{border:0}
+input{accent-color:#a9c98f} .historyItem{padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.historyItem:last-child{border:0}
+footer{text-align:center;color:#718474;font-size:9px;margin:18px 0 4px}
+.modal{position:fixed;inset:0;background:#000b;display:none;align-items:flex-end;z-index:5}.sheet{background:#19251d;border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));width:100%;max-height:85vh;overflow:auto}.sheet h2{margin:0 0 12px;font-size:18px}.sheet p{font-size:13px;line-height:1.5;color:var(--muted)}
+@media(min-width:650px){body{max-width:760px;margin:auto}.num{font-size:44px}}
+</style>
+</head>
+<body>
+<header>
+ <div><h1>TEMPOREGGIATORE</h1><div class="sub">4x4 FIELD INSTRUMENTS · SJ410</div></div>
+ <div class="status" id="status">PRONTO · GPS SPENTO</div>
+</header>
+
+<main class="grid">
+ <section class="card"><div class="label">ALTITUDINE GPS</div><div class="num" id="altitude">---</div><div class="unit">METRI S.L.M.</div></section>
+ <section class="card"><div class="label">VELOCITÀ GPS</div><div class="num" id="speed">---</div><div class="unit">KM/H</div></section>
+ <section class="card"><div class="label">ROLLIO · LATERALE</div><div class="num" id="roll">---</div><div class="unit">GRADI</div></section>
+ <section class="card"><div class="label">BECCHEGGIO · LONGITUDINALE</div><div class="num" id="pitch">---</div><div class="unit">GRADI</div></section>
+
+ <section class="card wide">
+  <div class="label">ASSETTO VEICOLO · VISTA DALL'ALTO</div>
+  <div id="vehicleWrap"><div class="axis x"></div><div class="axis y"></div><div id="vehicle">🚙</div></div>
+  <div class="legend"><span>← SINISTRA / DESTRA →</span><span>ROLLIO</span></div>
+  <div class="note" id="sensorNote">Fissa il telefono rigidamente al veicolo. La calibrazione va eseguita con il mezzo fermo su terreno piano.</div>
+  <div class="buttons"><button class="secondary" id="calibrate">CALIBRA PIANO</button><button class="secondary" id="sensorBtn">ATTIVA INCLINOMETRO</button></div>
+ </section>
+
+ <section class="card"><div class="label">QUOTA MASSIMA SESSIONE</div><div class="smallnum" id="maxAlt">---</div><div class="unit">METRI</div></section>
+ <section class="card"><div class="label">DISLIVELLO NETTO</div><div class="smallnum" id="deltaAlt">---</div><div class="unit">METRI</div></section>
+
+ <section class="card wide">
+  <div class="label">REGISTRAZIONE ESCURSIONE</div>
+  <div class="statrow"><span>Stato</span><strong id="recState">Non in registrazione</strong></div>
+  <div class="statrow"><span>Punti GPS</span><strong id="pointCount">0</strong></div>
+  <div class="statrow"><span>Distanza registrata</span><strong id="distance">0,00 km</strong></div>
+  <div class="statrow"><span>Durata</span><strong id="duration">00:00:00</strong></div>
+  <div class="buttons"><button id="start">INIZIA</button><button class="danger" id="stop" disabled>TERMINA</button></div>
+  <div class="buttons"><button class="secondary" id="csv">ESPORTA CSV</button><button class="secondary" id="gpx">ESPORTA GPX</button></div>
+ </section>
+
+ <section class="card wide">
+  <div class="label">PROFILO ALTIMETRICO · SESSIONE CORRENTE</div>
+  <canvas id="chart" width="700" height="230"></canvas>
+  <div class="note">Il profilo viene disegnato dai punti GPS acquisiti durante la registrazione.</div>
+ </section>
+
+ <section class="card wide">
+  <div class="label">ESCURSIONI SALVATE SU QUESTO IPHONE</div>
+  <div id="history"><div class="note">Nessuna escursione salvata.</div></div>
+ </section>
+ <section class="card wide">
+  <div class="label">STRUMENTI</div>
+  <div class="buttons"><button class="secondary" id="help">ISTRUZIONI</button><button class="secondary" id="clearHistory">CANCELLA STORICO</button></div>
+ </section>
+</main>
+<footer>Strumento indicativo · Non usare come dispositivo di sicurezza o anti-ribaltamento</footer>
+
+<div class="modal" id="modal"><div class="sheet"><h2 id="modalTitle">Istruzioni</h2><div id="modalText"></div><button class="secondary" id="closeModal" style="width:100%;margin-top:12px">CHIUDI</button></div></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let watchId=null, sensorActive=false, recording=false, points=[], sessionStart=null;
+let baseBeta=null, baseGamma=null, pitchDeg=null, rollDeg=null, maxAltitude=null, startAltitude=null, distanceM=0, lastPoint=null, timer=null;
+let history=JSON.parse(localStorage.getItem("temporeggiatore_history")||"[]");
+
+function fmt(n,d=0){return Number.isFinite(n)?n.toFixed(d).replace(".",","):"---";}
+function setStatus(s){$("status").textContent=s;}
+function updateTimer(){
+ if(!sessionStart)return;
+ const sec=Math.floor((Date.now()-sessionStart)/1000);
+ $("duration").textContent=[Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,"0")).join(":");
+}
+function haversine(a,b){
+ const R=6371000,rad=x=>x*Math.PI/180;
+ const dLat=rad(b.lat-a.lat),dLon=rad(b.lon-a.lon);
+ const x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;
+ return 2*R*Math.asin(Math.sqrt(x));
+}
+async function startSensors(){
+ if(!("geolocation" in navigator)){alert("Geolocalizzazione non supportata.");return;}
+ try{
+  if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
+   const p=await DeviceOrientationEvent.requestPermission();
+   if(p!=="granted"){alert("Permesso sensori negato.");return;}
+  }
+  window.addEventListener("deviceorientation",onOrientation,true);
+  sensorActive=true;
+  $("sensorBtn").textContent="INCLINOMETRO ATTIVO";
+  $("sensorNote").textContent="Sensore attivo. Monta il telefono sempre nella stessa posizione e calibra su piano.";
+ }catch(e){alert("Impossibile attivare il sensore: "+e.message);}
+}
+function onOrientation(e){
+ if(e.beta===null||e.gamma===null)return;
+ // beta/gamma sono angoli del dispositivo: la calibrazione azzera la posa iniziale.
+ if(baseBeta===null||baseGamma===null){pitchDeg=0;rollDeg=0;}
+ else{
+  pitchDeg=wrapAngle(e.beta-baseBeta);
+  rollDeg=wrapAngle(e.gamma-baseGamma);
+ }
+ $("pitch").textContent=fmt(pitchDeg,1)+"°";
+ $("roll").textContent=fmt(rollDeg,1)+"°";
+ $("vehicle").style.transform="rotate("+rollDeg+"deg)";
+}
+function wrapAngle(a){while(a>180)a-=360;while(a<-180)a+=360;return a;}
+$("sensorBtn").addEventListener("click",startSensors);
+$("calibrate").addEventListener("click",()=>{
+ if(!sensorActive){alert("Attiva prima l'inclinometro.");return;}
+ // La calibrazione memorizza la posa attuale come zero.
+ // Per evitare letture obsolete, richiede un nuovo evento di orientamento.
+ const handler=e=>{
+  if(e.beta===null||e.gamma===null)return;
+  baseBeta=e.beta;baseGamma=e.gamma;
+  pitchDeg=0;rollDeg=0;
+  $("pitch").textContent="0,0°";$("roll").textContent="0,0°";
+  $("vehicle").style.transform="rotate(0deg)";
+  $("sensorNote").textContent="Zero impostato. Non spostare il telefono rispetto al veicolo.";
+  window.removeEventListener("deviceorientation",handler,true);
+ };
+ window.addEventListener("deviceorientation",handler,true);
+ $("sensorNote").textContent="Acquisizione dello zero…";
+});
+function onGPS(pos){
+ const c=pos.coords, now=new Date().toISOString();
+ const alt=Number.isFinite(c.altitude)?c.altitude:null;
+ const sp=Number.isFinite(c.speed)&&c.speed>=0?c.speed*3.6:null;
+ $("speed").textContent=sp===null?"---":fmt(sp,1);
+ if(alt!==null){
+  $("altitude").textContent=fmt(alt);
+  maxAltitude=maxAltitude===null?alt:Math.max(maxAltitude,alt);
+  startAltitude=startAltitude===null?alt:startAltitude;
+  $("maxAlt").textContent=fmt(maxAltitude);
+  $("deltaAlt").textContent=fmt(alt-startAltitude);
+ }
+ setStatus("GPS ATTIVO · ±"+fmt(c.accuracy,0)+" m");
+ if(recording){
+  const p={time:now,lat:c.latitude,lon:c.longitude,alt,accuracy:c.accuracy,speed:sp,pitch:pitchDeg,roll:rollDeg};
+  if(lastPoint)distanceM+=haversine(lastPoint,p);
+  lastPoint=p;points.push(p);
+  $("pointCount").textContent=points.length;
+  $("distance").textContent=fmt(distanceM/1000,2)+" km";
+  drawChart();
+ }
+}
+function gpsError(e){setStatus("GPS: "+e.message);$("sensorNote").textContent="Controlla i permessi di localizzazione di Safari.";}
+function startGPS(){
+ if(watchId!==null)return;
+ watchId=navigator.geolocation.watchPosition(onGPS,gpsError,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+}
+$("start").addEventListener("click",()=>{
+ if(watchId===null)startGPS();
+ points=[];distanceM=0;lastPoint=null;maxAltitude=null;startAltitude=null;
+ recording=true;sessionStart=Date.now();
+ $("recState").textContent="IN CORSO";$("pointCount").textContent="0";$("distance").textContent="0,00 km";
+ $("start").disabled=true;$("stop").disabled=false;
+ timer=setInterval(updateTimer,1000);updateTimer();drawChart();
+});
+$("stop").addEventListener("click",()=>{
+ if(!recording)return;
+ recording=false;clearInterval(timer);timer=null;updateTimer();
+ $("recState").textContent="Terminata";$("start").disabled=false;$("stop").disabled=true;
+ if(points.length){
+  const item={name:"Escursione "+new Date().toLocaleString("it-IT"),date:new Date().toISOString(),points,distance:distanceM,duration:Date.now()-sessionStart};
+  history.unshift(item);history=history.slice(0,30);localStorage.setItem("temporeggiatore_history",JSON.stringify(history));renderHistory();
+ }
+});
+function drawChart(){
+ const canvas=$("chart"),ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height;
+ ctx.clearRect(0,0,w,h);ctx.strokeStyle="#405445";ctx.lineWidth=1;
+ for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(0,h*i/4);ctx.lineTo(w,h*i/4);ctx.stroke();}
+ const valid=points.filter(p=>p.alt!==null);
+ if(valid.length<2){ctx.fillStyle="#a4b5a6";ctx.font="20px sans-serif";ctx.fillText("In attesa di dati GPS",20,115);return;}
+ const vals=valid.map(p=>p.alt),min=Math.min(...vals),max=Math.max(...vals),range=Math.max(5,max-min);
+ ctx.beginPath();ctx.strokeStyle="#b6d39a";ctx.lineWidth=4;
+ valid.forEach((p,i)=>{const x=i/(valid.length-1)*w,y=h-15-(p.alt-min)/range*(h-35);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+ ctx.fillStyle="#dce9d7";ctx.font="18px sans-serif";ctx.fillText(Math.round(max)+" m",10,22);ctx.fillText(Math.round(min)+" m",10,h-5);
+}
+function download(name,content,type){
+ const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+$("csv").addEventListener("click",()=>{
+ if(!points.length){alert("Non ci sono punti da esportare.");return;}
+ const rows=[["time","latitude","longitude","altitude_m","gps_accuracy_m","speed_kmh","pitch_deg","roll_deg"].join(";"),
+ ...points.map(p=>[p.time,p.lat,p.lon,p.alt??"",p.accuracy,p.speed??"",p.pitch??"",p.roll??""].join(";"))];
+ download("temporometro_percorso.csv","\uFEFF"+rows.join("\n"),"text/csv;charset=utf-8");
+});
+$("gpx").addEventListener("click",()=>{
+ if(!points.length){alert("Non ci sono punti da esportare.");return;}
+ const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+ const trk=points.map(p=>`<trkpt lat="${p.lat}" lon="${p.lon}">${p.alt===null?"":`<ele>${p.alt}</ele>`}<time>${esc(p.time)}</time></trkpt>`).join("");
+ const gpx=`<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Temporometro 4x4" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Escursione Temporeggiatore</name><trkseg>${trk}</trkseg></trk></gpx>`;
+ download("temporometro_percorso.gpx",gpx,"application/gpx+xml");
+});
+function renderHistory(){
+ $("history").innerHTML=history.length?history.map((x,i)=>`<div class="historyItem"><strong>${escapeHTML(x.name)}</strong><br>${x.points.length} punti · ${(x.distance/1000).toFixed(2)} km <button class="secondary" data-export="${i}" style="width:auto;min-height:32px;padding:7px 10px;margin-top:7px">ESPORTA GPX</button></div>`).join(""):'<div class="note">Nessuna escursione salvata.</div>';
+ document.querySelectorAll("[data-export]").forEach(b=>b.addEventListener("click",()=>exportHistoryGPX(history[Number(b.dataset.export)])));
+}
+function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function exportHistoryGPX(item){
+ const trk=item.points.map(p=>`<trkpt lat="${p.lat}" lon="${p.lon}">${p.alt===null?"":`<ele>${p.alt}</ele>`}<time>${p.time}</time></trkpt>`).join("");
+ download("escursione_salvata.gpx",`<?xml version="1.0"?><gpx version="1.1" creator="Temporometro" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>${escapeHTML(item.name)}</name><trkseg>${trk}</trkseg></trk></gpx>`,"application/gpx+xml");
+}
+$("clearHistory").addEventListener("click",()=>{if(confirm("Cancellare tutte le escursioni salvate su questo iPhone?")){history=[];localStorage.removeItem("temporeggiatore_history");renderHistory();}});
+$("help").addEventListener("click",()=>{
+ $("modalTitle").textContent="Istruzioni e limiti";
+ $("modalText").innerHTML="<p><b>1. Installazione:</b> apri il sito pubblicato in HTTPS con Safari, premi Condividi e poi Aggiungi alla schermata Home.</p><p><b>2. Montaggio:</b> fissa il telefono rigidamente al veicolo. Il suo orientamento deve restare invariato durante l'escursione.</p><p><b>3. Calibrazione:</b> ferma il veicolo su una superficie il più possibile piana e premi CALIBRA PIANO. Lo zero è relativo alla posizione del telefono, non a una misura certificata del telaio.</p><p><b>4. GPS:</b> autorizza la posizione precisa e, se richiesto, consenti l'accesso durante l'uso. Il GPS può avere errori importanti in boschi, vallate e pareti rocciose.</p><p><b>5. Registrazione:</b> premi INIZIA; al termine premi TERMINA. I percorsi sono salvati localmente nel browser e possono essere esportati in CSV o GPX.</p><p><b>Sicurezza:</b> gli angoli possono essere falsati da accelerazioni, vibrazioni, rotazione del telefono e orientamento del supporto. Non usare questa app per decidere se una pendenza è sicura o per prevenire un ribaltamento. Non interagire con il telefono mentre guidi.</p>";
+ $("modal").style.display="flex";
+});
+$("closeModal").addEventListener("click",()=>$("modal").style.display="none");
+$("modal").addEventListener("click",e=>{if(e.target===$("modal"))$("modal").style.display="none";});
+renderHistory();drawChart();
+if("serviceWorker" in navigator && location.protocol.startsWith("http"))window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
